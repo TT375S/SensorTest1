@@ -38,8 +38,9 @@ public class MainActivity extends Activity implements SensorEventListener {
         super.onResume();
         // Listenerの登録
         Sensor accel = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION); //TYPE_LINEAR_ACCELERATIONは重力の影響を除いた加速度を得る
-
+        Sensor magne = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);  //ドリフトを考慮したジャイロセンサー値を得る
         sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_FASTEST);
+        sensorManager.registerListener(this, magne, SensorManager.SENSOR_DELAY_FASTEST);
     }
 
     // 解除するコード
@@ -62,11 +63,20 @@ public class MainActivity extends Activity implements SensorEventListener {
     float vx = 0, vy = 0, vz = 0;   //現在こいつらは端末から見た座標(ローカル座標)なことに注意
     float x=0, y=0, z=0;
 
+
+    long oldTime_rotate = 0;    //前回更新時刻
+    final private float k_rotate = 0.1f;    //回転センサーの値へのローパスフィルターの効きの強さ
+    //private float magX=0, magY=0, magZ=0;   //回転センサーの値
+    private float vx_rotate =0, vy_rotate =0, vz_rotate =0;    //回転センサーの変化量
+    private float lowPassX_rotate =0, lowPassY_rotate =0, lowPassZ_rotate =0;
+
     //このメソッドは、リスナーとして登録してあるどのセンサーの値が変化しても呼ばれる
     @Override
     public void onSensorChanged(SensorEvent event) {
 
-        //このメソッドが呼ばれた理由となる、値の変わったセンサのタイプを確かめないとダメ
+        //このメソッドが呼ばれた理由となる、値の変わったセンサのタイプを確かめる必要がある
+
+        //重力の影響を除いた加速度センサの場合
         if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
             //センサーの生の値
             sensorX = event.values[0];
@@ -102,6 +112,14 @@ public class MainActivity extends Activity implements SensorEventListener {
                     + " X: " + x + "\n"
                     + " Y: " + y + "\n"
                     + " Z: " + z;
+            strTmp += "\nHP磁気センサー\n"
+                    + " X: " + lowPassX_rotate + "\n"
+                    + " Y: " + lowPassY_rotate + "\n"
+                    + " Z: " + lowPassZ_rotate;
+            strTmp += "\nHP磁気センサー速度\n"
+                    + " X: " + vx_rotate + "\n"
+                    + " Y: " + vy_rotate + "\n"
+                    + " Z: " + vz_rotate;
             textView.setText(strTmp);
 
             if(flg){
@@ -119,6 +137,35 @@ public class MainActivity extends Activity implements SensorEventListener {
             x += vx * interval / 1000; // [cm] にする
             y += vy * interval / 1000;
             z += vz * interval / 1000;
+        }
+
+        //回転センサーの場合
+        if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
+            if(oldTime_rotate == 0) oldTime_rotate = System.currentTimeMillis();
+            long nowTime = System.currentTimeMillis();
+            long interval = nowTime - oldTime_rotate;
+            oldTime_rotate = nowTime;
+
+            float tempX = lowPassX_rotate, tempY = lowPassY_rotate, tempZ = lowPassZ_rotate;
+
+            //LPF
+            lowPassX_rotate += (event.values[0] - lowPassX_rotate) * k_rotate;
+            lowPassY_rotate += (event.values[1] - lowPassY_rotate) * k_rotate;
+            lowPassZ_rotate += (event.values[2] - lowPassZ_rotate) * k_rotate;
+
+//            vx_rotate = (lowPassX_rotate - tempX)/interval;
+//            vy_rotate = (lowPassY_rotate - tempY)/interval;
+//            vz_rotate = (lowPassZ_rotate - tempZ)/interval;
+
+            // High Pass Filter
+            float magRawAX = event.values[0] - lowPassX_rotate;
+            float magRawAY = event.values[1] - lowPassY_rotate;
+            float magRawAZ = event.values[2] - lowPassZ_rotate;
+
+            //向きの変化速度
+            vx_rotate += magRawAX * interval / 10;
+            vy_rotate += magRawAY * interval / 10;
+            vz_rotate += magRawAZ * interval / 10;
         }
     }
 
