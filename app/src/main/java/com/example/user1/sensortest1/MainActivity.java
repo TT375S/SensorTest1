@@ -37,15 +37,12 @@ public class MainActivity extends Activity implements SensorEventListener {
     protected void onResume() {
         super.onResume();
         // Listenerの登録
-        Sensor accel = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        Sensor accel = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION); //TYPE_LINEAR_ACCELERATIONは重力の影響を除いた加速度を得る
 
         sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_FASTEST);
-//        sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_FASTEST);
-//        sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME);
-//        sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_UI);
     }
 
-    // 解除するコードも入れる!
+    // 解除するコード
     @Override
     protected void onPause() {
         super.onPause();
@@ -53,42 +50,39 @@ public class MainActivity extends Activity implements SensorEventListener {
         sensorManager.unregisterListener(this);
     }
 
-    final private float k = 0.1f;
+    final private float k = 0.1f;   //値が大きいほどローパスフィルタの効きが強くなる
     private float lowPassX = 0;
     private float lowPassY = 0;
     private float lowPassZ = 0;
 
-    long oldTime = 0;
+    private float rawAx = 0, rawAy=0, rawAz = 0;    //ハイパスフィルタを通した値
 
-    float vx = 0, vy = 0, vz = 0;
+    long oldTime = 0;   //前回、センサの値が変更されたとき
+
+    float vx = 0, vy = 0, vz = 0;   //現在こいつらは端末から見た座標(ローカル座標)なことに注意
     float x=0, y=0, z=0;
 
+    //このメソッドは、リスナーとして登録してあるどのセンサーの値が変化しても呼ばれる
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if(oldTime == 0) oldTime = System.currentTimeMillis();
-        // ax, ay, az が求まった後で
-        long nowTime = System.currentTimeMillis();
-        long interval = nowTime - oldTime;
-        oldTime = nowTime;
 
-        vx += lowPassX * interval / 10; // [cm/s] にする
-        vy += lowPassY * interval / 10;
-        vz += lowPassZ * interval / 10;
-        x += vx * interval / 1000; // [cm] にする
-        y += vy * interval / 1000;
-        z += vz * interval / 1000;
-
-
-
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+        //このメソッドが呼ばれた理由となる、値の変わったセンサのタイプを確かめないとダメ
+        if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
+            //センサーの生の値
             sensorX = event.values[0];
             sensorY = event.values[1];
             sensorZ = event.values[2];
 
-
-            lowPassX += (event.values[0] - lowPassX) * k; // event.values[0から2] はそれぞれ端末座標系での生の加速度です
+            //LPF
+            lowPassX += (event.values[0] - lowPassX) * k;
             lowPassY += (event.values[1] - lowPassY) * k;
             lowPassZ += (event.values[2] - lowPassZ) * k;
+
+            // High Pass Filter
+            rawAx = event.values[0] - lowPassX;
+            rawAy = event.values[1] - lowPassY;
+            rawAz = event.values[2] - lowPassZ;
+
 
             String strTmp = "加速度センサー\n"
                     + " X: " + sensorX + "\n"
@@ -113,6 +107,18 @@ public class MainActivity extends Activity implements SensorEventListener {
             if(flg){
                 showInfo(event);
             }
+
+            if(oldTime == 0) oldTime = System.currentTimeMillis();
+            long nowTime = System.currentTimeMillis();
+            long interval = nowTime - oldTime;
+            oldTime = nowTime;
+
+            vx += rawAx * interval / 10; // [cm/s] にする
+            vy += rawAy * interval / 10;
+            vz += rawAz * interval / 10;
+            x += vx * interval / 1000; // [cm] にする
+            y += vy * interval / 1000;
+            z += vz * interval / 1000;
         }
     }
 
