@@ -43,7 +43,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 
-public class MainActivity extends AppCompatActivity implements SensorEventListener, GoogleApiClient.ConnectionCallbacks,GoogleApiClient.OnConnectionFailedListener, com.google.android.gms.location.LocationListener {
+public class MainActivity extends Activity implements SensorEventListener, GoogleApiClient.ConnectionCallbacks,GoogleApiClient.OnConnectionFailedListener, com.google.android.gms.location.LocationListener {
 
     private SensorManager sensorManager;
     private TextView textView, textInfo;
@@ -142,16 +142,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         mGoogleApiClient = new GoogleApiClient.Builder(this)
                 .addApi(LocationServices.API)
+                .addApi(Places.GEO_DATA_API)
+                .addApi(Places.PLACE_DETECTION_API)
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
 
-        Log.d("LocationActivity", "mGoogleApiClient");
+
 
 
         startFusedLocation();
 
-        //stopFusedLocation();
     }
 
 
@@ -179,53 +180,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         stopFusedLocation();
     }
 
+
     @Override
     public void onConnected(Bundle bundle) {
-        Log.d("LocationActivity", "onConnected");
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
-        Location currentLocation = fusedLocationProviderApi.getLastLocation(mGoogleApiClient);
-
-        if (currentLocation != null && currentLocation.getTime() > 20000) {
-            location = currentLocation;
-
-            textLog += "---------- onConnected \n";
-            textLog += "Latitude=" + String.valueOf(location.getLatitude()) + "\n";
-            textLog += "Longitude=" + String.valueOf(location.getLongitude()) + "\n";
-            textLog += "Accuracy=" + String.valueOf(location.getAccuracy()) + "\n";
-            textLog += "Altitude=" + String.valueOf(location.getAltitude()) + "\n";
-            textLog += "Time=" + String.valueOf(location.getTime()) + "\n";
-            textLog += "Speed=" + String.valueOf(location.getSpeed()) + "\n";
-            textLog += "Bearing=" + String.valueOf(location.getBearing()) + "\n";
-            textView.setText(textLog);
-
-            Log.d("debug", textLog);
-
-        } else {
-            // バックグラウンドから戻ってしまうと例外が発生する場合がある
-            try {
-                final AppCompatActivity activity = this;
-                //
-                fusedLocationProviderApi.requestLocationUpdates(mGoogleApiClient, locationRequest, this);
-                // Schedule a Thread to unregister location listeners
-                Executors.newScheduledThreadPool(1).schedule(new Runnable() {
-                    @Override
-                    public void run() {
-                        fusedLocationProviderApi.removeLocationUpdates(mGoogleApiClient, (LocationListener) activity);
-                    }
-                }, 60000, TimeUnit.MILLISECONDS);
-
-                textLog += "onConnected(), requestLocationUpdates \n";
-                textView.setText(textLog);
-
-            } catch (Exception e) {
-                e.printStackTrace();
-                Toast toast = Toast.makeText(this, "例外が発生、位置情報のPermissionを許可していますか？", Toast.LENGTH_SHORT);
-                toast.show();
-            }
-        }
+        fusedLocationProviderApi.requestLocationUpdates(mGoogleApiClient, locationRequest, this);
     }
 
     final private float k = 0.1f;   //値が大きいほどローパスフィルタの効きが強くなる
@@ -388,6 +349,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     @Override
     public void onLocationChanged(Location location) {
+
         lastLocationTime = location.getTime() - lastLocationTime;
 
         textLog = "---------- onLocationChanged \n";
@@ -399,6 +361,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         textLog += "Speed=" + String.valueOf(location.getSpeed()) + "\n";
         textLog += "Bearing=" + String.valueOf(location.getBearing()) + "\n";
         textLog += "time= " + String.valueOf(lastLocationTime) + " msec \n";
+
+        Log.d("AAAAAA", textLog);
 
         // 緯度経度の表示
         TextView gpsInfo = (TextView) findViewById(R.id.GPSInfo);
@@ -423,6 +387,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     @Override
     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+        Log.e("LocationClient", "ConnectionFailed!");
         if (mResolvingError) {
             // Already attempting to resolve an error.
             Log.d("", "Already attempting to resolve an error");

@@ -26,7 +26,4 @@
     </application>
 
 
-    <activity android:name=".LocationActivity">
-    </activity>
-
 </manifest>
