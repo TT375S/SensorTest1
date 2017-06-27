@@ -10,11 +10,13 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.location.Location;
-import android.location.LocationListener;
+
 import android.location.LocationManager;
 import android.location.LocationProvider;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -22,7 +24,26 @@ import android.util.Log;
 import android.widget.TextView;
 import android.widget.Toast;
 
-public class MainActivity extends AppCompatActivity implements SensorEventListener, LocationListener {
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.FusedLocationProviderApi;
+import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.FusedLocationProviderApi;
+import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.places.Places;
+
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+
+public class MainActivity extends AppCompatActivity implements SensorEventListener, GoogleApiClient.ConnectionCallbacks,GoogleApiClient.OnConnectionFailedListener, com.google.android.gms.location.LocationListener {
 
     private SensorManager sensorManager;
     private TextView textView, textInfo;
@@ -32,6 +53,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private boolean flg = true;
 
     private LocationManager locationManager;
+
+    // LocationClient の代わりにGoogleApiClientを使います
+    private GoogleApiClient mGoogleApiClient;
+    private boolean mResolvingError = false;
+
+    private FusedLocationProviderApi fusedLocationProviderApi;
+
+    private LocationRequest locationRequest;
+    private Location location;
+    private long lastLocationTime = 0;
+
+    private String textLog = "start \n";
 
     @Override
     protected void onCreate(Bundle savedInstanceState)  {
@@ -54,33 +87,27 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         else{
             locationStart();
         }
+
     }
 
-    private void locationStart(){
-        Log.d("debug","locationStart()");
+    private void startFusedLocation(){
+        Log.d("LocationActivity", "onStart");
 
-        // LocationManager インスタンス生成
-        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        // Connect the client.
+        if (!mResolvingError) {
+            // Connect the client.
+            mGoogleApiClient.connect();
 
-        final boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
 
-        if (!gpsEnabled) {
-            // GPSを設定するように促す
-            Intent settingsIntent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-            startActivity(settingsIntent);
-            Log.d("debug", "not gpsEnable, startActivity");
         } else {
-            Log.d("debug", "gpsEnabled");
+
         }
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION,}, 1000);
+    }
 
-            Log.d("debug", "checkSelfPermission false");
-            return;
-        }
-
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 50, this);
+    private void stopFusedLocation(){
+        // Disconnecting the client invalidates it.
+        mGoogleApiClient.disconnect();
     }
 
     // 結果の受け取り
@@ -102,6 +129,32 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
+    private void locationStart(){
+        Log.d("debug","locationStart()");
+
+        // LocationRequest を生成して精度、インターバルを設定
+        locationRequest = LocationRequest.create();
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        locationRequest.setInterval(1000);
+        locationRequest.setFastestInterval(16);
+
+        fusedLocationProviderApi = LocationServices.FusedLocationApi;
+
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addApi(LocationServices.API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+
+        Log.d("LocationActivity", "mGoogleApiClient");
+
+
+        startFusedLocation();
+
+        //stopFusedLocation();
+    }
+
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -118,6 +171,61 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onPause();
         // Listenerを解除
         sensorManager.unregisterListener(this);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        stopFusedLocation();
+    }
+
+    @Override
+    public void onConnected(Bundle bundle) {
+        Log.d("LocationActivity", "onConnected");
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        Location currentLocation = fusedLocationProviderApi.getLastLocation(mGoogleApiClient);
+
+        if (currentLocation != null && currentLocation.getTime() > 20000) {
+            location = currentLocation;
+
+            textLog += "---------- onConnected \n";
+            textLog += "Latitude=" + String.valueOf(location.getLatitude()) + "\n";
+            textLog += "Longitude=" + String.valueOf(location.getLongitude()) + "\n";
+            textLog += "Accuracy=" + String.valueOf(location.getAccuracy()) + "\n";
+            textLog += "Altitude=" + String.valueOf(location.getAltitude()) + "\n";
+            textLog += "Time=" + String.valueOf(location.getTime()) + "\n";
+            textLog += "Speed=" + String.valueOf(location.getSpeed()) + "\n";
+            textLog += "Bearing=" + String.valueOf(location.getBearing()) + "\n";
+            textView.setText(textLog);
+
+            Log.d("debug", textLog);
+
+        } else {
+            // バックグラウンドから戻ってしまうと例外が発生する場合がある
+            try {
+                final AppCompatActivity activity = this;
+                //
+                fusedLocationProviderApi.requestLocationUpdates(mGoogleApiClient, locationRequest, this);
+                // Schedule a Thread to unregister location listeners
+                Executors.newScheduledThreadPool(1).schedule(new Runnable() {
+                    @Override
+                    public void run() {
+                        fusedLocationProviderApi.removeLocationUpdates(mGoogleApiClient, (LocationListener) activity);
+                    }
+                }, 60000, TimeUnit.MILLISECONDS);
+
+                textLog += "onConnected(), requestLocationUpdates \n";
+                textView.setText(textLog);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                Toast toast = Toast.makeText(this, "例外が発生、位置情報のPermissionを許可していますか？", Toast.LENGTH_SHORT);
+                toast.show();
+            }
+        }
     }
 
     final private float k = 0.1f;   //値が大きいほどローパスフィルタの効きが強くなる
@@ -280,31 +388,50 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     @Override
     public void onLocationChanged(Location location) {
+        lastLocationTime = location.getTime() - lastLocationTime;
+
+        textLog = "---------- onLocationChanged \n";
+        textLog += "Latitude=" + String.valueOf(location.getLatitude()) + "\n";
+        textLog += "Longitude=" + String.valueOf(location.getLongitude()) + "\n";
+        textLog += "Accuracy=" + String.valueOf(location.getAccuracy()) + "\n";
+        textLog += "Altitude=" + String.valueOf(location.getAltitude()) + "\n";
+        textLog += "Time=" + String.valueOf(location.getTime()) + "\n";
+        textLog += "Speed=" + String.valueOf(location.getSpeed()) + "\n";
+        textLog += "Bearing=" + String.valueOf(location.getBearing()) + "\n";
+        textLog += "time= " + String.valueOf(lastLocationTime) + " msec \n";
+
+        // 緯度経度の表示
+        TextView gpsInfo = (TextView) findViewById(R.id.GPSInfo);
+        gpsInfo.setText(textLog);
+    }
+
+//    @Override
+//    public void onProviderEnabled(String provider) {
+//
+//    }
+//
+//    @Override
+//    public void onProviderDisabled(String provider) {
+//
+//    }
+
+
+    @Override
+    public void onConnectionSuspended(int i) {
 
     }
 
     @Override
-    public void onStatusChanged(String provider, int status, Bundle extras) {
-        switch (status) {
-            case LocationProvider.AVAILABLE:
-                Log.d("debug", "LocationProvider.AVAILABLE");
-                break;
-            case LocationProvider.OUT_OF_SERVICE:
-                Log.d("debug", "LocationProvider.OUT_OF_SERVICE");
-                break;
-            case LocationProvider.TEMPORARILY_UNAVAILABLE:
-                Log.d("debug", "LocationProvider.TEMPORARILY_UNAVAILABLE");
-                break;
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+        if (mResolvingError) {
+            // Already attempting to resolve an error.
+            Log.d("", "Already attempting to resolve an error");
+
+            return;
+        } else if (connectionResult.hasResolution()) {
+
+        } else {
+            mResolvingError = true;
         }
-    }
-
-    @Override
-    public void onProviderEnabled(String provider) {
-
-    }
-
-    @Override
-    public void onProviderDisabled(String provider) {
-
     }
 }
