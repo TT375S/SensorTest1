@@ -47,7 +47,7 @@ public class HttpGetData extends AsyncTask<Double, Void, JSONArray> {
         double longtitudeSE = param[3];
 
         try {
-            StringBuilder urlStrBuilder = new StringBuilder("http://120.75.227.178:3000/dots/api/search/rectangle/json");
+            StringBuilder urlStrBuilder = new StringBuilder("http://192.168.1.110:3000/dots/api/search/rectangle/json");
             urlStrBuilder.append("?langtitudeNW=" + latitudeNW + "&longtitudeNW=" + longtitudeNW);  //左上と右上の座標を指定してその矩形の囲む領域から検索
             urlStrBuilder.append("&langtitudeSE=" + latitudeSE + "&longtitudeSE=" + longtitudeSE);
             URL u = new URL(urlStrBuilder.toString());

@@ -40,6 +40,7 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.places.Places;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.concurrent.Executors;
@@ -96,9 +97,48 @@ public class MainActivity extends Activity implements SensorEventListener,
             locationStart();
         }
 
-        HttpGetData aaaa = new HttpGetData(this);
-        aaaa.execute(36.333, 32.0, 2323.0, 222.2);
+        test();
     }
+
+    //テスト用
+    void test(){
+        Log.d("HttpPostData", "UGGGGG");
+        HttpGetData aaaa = new HttpGetData(this);
+        //aaaa.execute(36.333, 32.0, 2323.0, 222.2);
+        Log.d("HttpPostData", "AAADAFSDAF");
+
+        JSONObject jsonObject = new JSONObject();
+        try {
+            jsonObject.put("typename", "DODGE");
+            jsonObject.put("speed", 32.1);
+            jsonObject.put("degree", 10.1);
+            jsonObject.put("latitude", 164.2323232);
+            jsonObject.put("longtitude", 36.7474737);
+            jsonObject.put("time", "2017-06-03T11:01:01.000");
+
+            JSONArray jsonArray = new JSONArray();
+            jsonArray.put(jsonObject);
+
+            jsonObject = new JSONObject();
+
+            jsonObject.put("typename", "SUDDEN-BREAKING");
+            jsonObject.put("speed", 42.1);
+            jsonObject.put("degree", 39.1);
+            jsonObject.put("latitude", 163.2323232);
+            jsonObject.put("longtitude", 36.7874737);
+            jsonObject.put("time", "2017-06-03T11:15:01.000");
+            jsonArray.put(jsonObject);
+
+            Log.d("HttpPostData", jsonArray.toString());
+            //POSTする
+            HttpPostData.makeRequest( "http://192.168.1.110:3000/dots/api/post/json" ,jsonArray);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
 
     private void locationStart(){
         Log.d("debug","locationStart()");
