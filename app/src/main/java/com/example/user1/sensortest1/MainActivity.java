@@ -102,10 +102,8 @@ public class MainActivity extends Activity implements SensorEventListener,
 
     //テスト用
     void test(){
-        Log.d("HttpPostData", "UGGGGG");
         HttpGetData aaaa = new HttpGetData(this);
         //aaaa.execute(36.333, 32.0, 2323.0, 222.2);
-        Log.d("HttpPostData", "AAADAFSDAF");
 
         JSONObject jsonObject = new JSONObject();
         try {
@@ -131,7 +129,9 @@ public class MainActivity extends Activity implements SensorEventListener,
 
             Log.d("HttpPostData", jsonArray.toString());
             //POSTする
-            HttpPostData.makeRequest( "http://192.168.1.110:3000/dots/api/post/json" ,jsonArray);
+            HttpPostData httpPostData = new HttpPostData();
+            httpPostData.execute(jsonArray);
+
         } catch (JSONException e) {
             e.printStackTrace();
         } catch (Exception e) {
