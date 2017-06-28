@@ -39,11 +39,19 @@ import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.places.Places;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 
-public class MainActivity extends Activity implements SensorEventListener, GoogleApiClient.ConnectionCallbacks,GoogleApiClient.OnConnectionFailedListener, com.google.android.gms.location.LocationListener {
+public class MainActivity extends Activity implements SensorEventListener,
+                    GoogleApiClient.ConnectionCallbacks,
+                    GoogleApiClient.OnConnectionFailedListener,
+                    com.google.android.gms.location.LocationListener,
+        HttpGetData.HttpGetDataListner
+{
 
     private SensorManager sensorManager;
     private TextView textView, textInfo;
@@ -88,6 +96,30 @@ public class MainActivity extends Activity implements SensorEventListener, Googl
             locationStart();
         }
 
+        HttpGetData aaaa = new HttpGetData(this);
+        aaaa.execute(36.333, 32.0, 2323.0, 222.2);
+    }
+
+    private void locationStart(){
+        Log.d("debug","locationStart()");
+
+        // LocationRequest を生成して精度、インターバルを設定
+        locationRequest = LocationRequest.create();
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        locationRequest.setInterval(1000);
+        locationRequest.setFastestInterval(16);
+
+        fusedLocationProviderApi = LocationServices.FusedLocationApi;
+
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addApi(LocationServices.API)
+                .addApi(Places.GEO_DATA_API)
+                .addApi(Places.PLACE_DETECTION_API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+
+        startFusedLocation();
     }
 
     private void startFusedLocation(){
@@ -129,31 +161,7 @@ public class MainActivity extends Activity implements SensorEventListener, Googl
         }
     }
 
-    private void locationStart(){
-        Log.d("debug","locationStart()");
 
-        // LocationRequest を生成して精度、インターバルを設定
-        locationRequest = LocationRequest.create();
-        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        locationRequest.setInterval(1000);
-        locationRequest.setFastestInterval(16);
-
-        fusedLocationProviderApi = LocationServices.FusedLocationApi;
-
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addApi(LocationServices.API)
-                .addApi(Places.GEO_DATA_API)
-                .addApi(Places.PLACE_DETECTION_API)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
-                .build();
-
-
-
-
-        startFusedLocation();
-
-    }
 
 
     @Override
@@ -189,6 +197,7 @@ public class MainActivity extends Activity implements SensorEventListener, Googl
         fusedLocationProviderApi.requestLocationUpdates(mGoogleApiClient, locationRequest, this);
     }
 
+    //-----センサー値取得関係-----
     final private float k = 0.1f;   //値が大きいほどローパスフィルタの効きが強くなる
     private float lowPassX = 0;
     private float lowPassY = 0;
@@ -369,17 +378,6 @@ public class MainActivity extends Activity implements SensorEventListener, Googl
         gpsInfo.setText(textLog);
     }
 
-//    @Override
-//    public void onProviderEnabled(String provider) {
-//
-//    }
-//
-//    @Override
-//    public void onProviderDisabled(String provider) {
-//
-//    }
-
-
     @Override
     public void onConnectionSuspended(int i) {
 
@@ -398,5 +396,10 @@ public class MainActivity extends Activity implements SensorEventListener, Googl
         } else {
             mResolvingError = true;
         }
+    }
+
+    @Override
+    public void finishedFetchingHttpGetData(JSONArray jsonObject) {
+        return ;
     }
 }
