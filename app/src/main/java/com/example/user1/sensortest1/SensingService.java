@@ -1,69 +1,68 @@
 package com.example.user1.sensortest1;
 
-import android.Manifest;
-import android.app.Activity;
+import android.*;
+import android.app.Service;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.icu.text.SimpleDateFormat;
-import android.icu.util.TimeZone;
 import android.location.Location;
-
 import android.location.LocationManager;
-import android.location.LocationProvider;
 import android.os.Bundle;
-import android.provider.Settings;
+import android.os.IBinder;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
-import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.FusedLocationProviderApi;
-import com.google.android.gms.location.LocationListener;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationServices;
-
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.location.FusedLocationProviderApi;
-import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.places.Places;
-import com.google.android.gms.nearby.messages.Strategy;
-import com.google.android.gms.vision.text.Text;
 
-import org.apache.http.client.methods.HttpPost;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.Calendar;
-import java.util.Locale;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
+/**
+ * Created by user1 on 2017/06/29.
+ */
 
-public class MainActivity extends Activity implements SensorEventListener,
-                    GoogleApiClient.ConnectionCallbacks,
-                    GoogleApiClient.OnConnectionFailedListener,
-                    com.google.android.gms.location.LocationListener,
-        HttpGetData.HttpGetDataListner,
-        View.OnClickListener
-{
+public class SensingService extends Service implements SensorEventListener,
+        GoogleApiClient.ConnectionCallbacks,
+        GoogleApiClient.OnConnectionFailedListener,
+        com.google.android.gms.location.LocationListener,
+        HttpGetData.HttpGetDataListner{
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        reportSpeed();
+        checkDODGE();
+        Log.d("SensingService", "STARTSERVICE!");
+        return super.onStartCommand(intent, flags, startId);
+    }
+
+    @Override
+    public void onDestroy() {
+        sendReport();
+        super.onDestroy();
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
     private SensorManager sensorManager;
     private TextView textView, textInfo;
     private float sensorX;
@@ -92,53 +91,22 @@ public class MainActivity extends Activity implements SensorEventListener,
     private String textLog = "start \n";
 
     @Override
-    protected void onCreate(Bundle savedInstanceState)  {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+    public void onCreate()  {
+        Log.d("SensingService", "STARTSERVICE!");
+        super.onCreate();
 
         // Get an instance of the SensorManager
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
 
-        textInfo = (TextView) findViewById(R.id.text_info);
-        // Get an instance of the TextView
-        textView = (TextView) findViewById(R.id.text_view);
+        // Listenerの登録
+        Sensor accel = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION); //TYPE_LINEAR_ACCELERATIONは重力の影響を除いた加速度を得る
+        Sensor magne = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);  //ドリフトを考慮したジャイロセンサー値を得る
+        sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_FASTEST);
+        sensorManager.registerListener(this, magne, SensorManager.SENSOR_DELAY_FASTEST);
 
-        //位置情報のパーミッションチェック
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION,}, 1000);
-        }
-        else{
-            locationStart();
-        }
-
-        //レポートボタンの設定
-        findViewById(R.id.reportButton).setOnClickListener(this);
+        locationStart();
 
         //test(); //テスト用！本番では外す
-
-        findViewById(R.id.startServiceButton).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent2 = new Intent(getApplication(), ServiceTimer.class);
-                startService(intent2);
-                Intent intent = new Intent(getApplication(), SensingService.class);
-                startService(intent);
-            }
-        });
-
-        findViewById(R.id.stopServiceButton).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent2 = new Intent(getApplication(), ServiceTimer.class);
-                stopService(intent2);
-                // Serviceの停止
-                Intent intent = new Intent(getApplication(), SensingService.class);
-                stopService(intent);
-
-            }
-        });
-
-
     }
 
     //テスト用
@@ -221,50 +189,6 @@ public class MainActivity extends Activity implements SensorEventListener,
     private void stopFusedLocation(){
         // Disconnecting the client invalidates it.
         mGoogleApiClient.disconnect();
-    }
-
-    // パーミッション要求結果の受け取り
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        if (requestCode == 1000) {
-            // 使用が許可された
-            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Log.d("debug","checkSelfPermission true");
-
-                locationStart();
-                return;
-            } else {
-                // それでも拒否された時の対応
-                Toast toast = Toast.makeText(this, "これ以上なにもできません", Toast.LENGTH_SHORT);
-                toast.show();
-            }
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // Listenerの登録
-        Sensor accel = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION); //TYPE_LINEAR_ACCELERATIONは重力の影響を除いた加速度を得る
-        Sensor magne = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);  //ドリフトを考慮したジャイロセンサー値を得る
-        sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_FASTEST);
-        sensorManager.registerListener(this, magne, SensorManager.SENSOR_DELAY_FASTEST);
-
-        startFusedLocation();
-    }
-
-    // 解除するコード
-    @Override
-    protected void onPause() {
-        super.onPause();
-        // Listenerを解除
-        //sensorManager.unregisterListener(this);
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        //stopFusedLocation();
     }
 
     @Override
@@ -453,10 +377,6 @@ public class MainActivity extends Activity implements SensorEventListener,
 
         Log.d("MainActivity", textLog);
 
-        // 緯度経度の表示
-        TextView gpsInfo = (TextView) findViewById(R.id.GPSInfo);
-        gpsInfo.setText(textLog);
-
         //スピード更新
         speed_foward = location.getSpeed();
         //位置更新
@@ -497,41 +417,40 @@ public class MainActivity extends Activity implements SensorEventListener,
     final float sideThreshold = 1;  //km/h
     final float rotateThreshold = 0.8f; //cm/s ?
     public void checkDODGE(){
-        return;
-//        long nowTime = System.currentTimeMillis();
-//        long interval = nowTime - lastDodgeTime;
-//
-//        if(interval < dodgeInterval) return;
-//
-//        //時速10km/h以上で
-//        if(speed_foward * 60 * 60 / 1000 > fowardThreshold){
-//            //横移動速度が時速1km/h以上で
-//            if(Math.abs(speed_right * 60 * 60 / 1000/1000 )> sideThreshold){
-//                //回転速度が0.8cm/s以下、つまり回転していないとき
-//                if(speed_rotate < rotateThreshold){
-//                    lastDodgeTime = nowTime;    //最終更新時刻を更新
-//
-//                    JSONObject jsonObject = new JSONObject();
-//                    try {
-//                        //結果を追加
-//                        jsonObject.put("typename", "DODGE");
-//                        jsonObject.put("speed", speed_foward  );
-//                        jsonObject.put("degree", speed_right );
-//                        jsonObject.put("latitude", currentLatitude);
-//                        jsonObject.put("longtitude", currentLongtitude);
-//
-//                        Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
-//                        jsonObject.put("time", timestamp);
-////                        logInfo += jsonObject;
-////                        TextView log = (TextView)(findViewById(R.id.logInfo));
-////                        log.setText(logInfo);
-//                    } catch (JSONException e) {
-//                        e.printStackTrace();
-//                    }
-//                    DataHoldSingleton.getInstance().report.put(jsonObject);
-//                }
-//            }
-//        }
+        long nowTime = System.currentTimeMillis();
+        long interval = nowTime - lastDodgeTime;
+
+        if(interval < dodgeInterval) return;
+
+        //時速10km/h以上で
+        if(speed_foward * 60 * 60 / 1000 > fowardThreshold){
+            //横移動速度が時速1km/h以上で
+            if(Math.abs(speed_right * 60 * 60 / 1000/1000 )> sideThreshold){
+                //回転速度が0.8cm/s以下、つまり回転していないとき
+                if(speed_rotate < rotateThreshold){
+                    lastDodgeTime = nowTime;    //最終更新時刻を更新
+
+                    JSONObject jsonObject = new JSONObject();
+                    try {
+                        //結果を追加
+                        jsonObject.put("typename", "DODGE");
+                        jsonObject.put("speed", speed_foward  );
+                        jsonObject.put("degree", speed_right );
+                        jsonObject.put("latitude", currentLatitude);
+                        jsonObject.put("longtitude", currentLongtitude);
+
+                        Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
+                        jsonObject.put("time", timestamp);
+//                        logInfo += jsonObject;
+//                        TextView log = (TextView)(findViewById(R.id.logInfo));
+//                        log.setText(logInfo);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    DataHoldSingleton.getInstance().report.put(jsonObject);
+                }
+            }
+        }
     }
 
     long lastSpeedReportTime = 0;
@@ -539,49 +458,34 @@ public class MainActivity extends Activity implements SensorEventListener,
 
     //定期スピードレポート
     public void reportSpeed(){
-        TextView log = (TextView)(findViewById(R.id.logInfo));
-        log.setText("num:"+DataHoldSingleton.getInstance().report.length()+"\n");
-        return;
-//        long nowTime = System.currentTimeMillis();
-//        long interval = nowTime - lastSpeedReportTime;
-//
-//        if(interval < speedReportInterval) return;
-//
-//        lastSpeedReportTime = nowTime;    //最終更新時刻を更新
-//
-//                    JSONObject jsonObject = new JSONObject();
-//                    try {
-//                        //結果を追加
-//                        jsonObject.put("typename", "SPEEDREPORT");
-//                        jsonObject.put("speed", speed_foward );
-//                        jsonObject.put("degree", speed_right );
-//                        jsonObject.put("latitude", currentLatitude);
-//                        jsonObject.put("longtitude", currentLongtitude);
-//
-//                        Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
-//                        jsonObject.put("time", timestamp);
-//
-//                    } catch (JSONException e) {
-//                        e.printStackTrace();
-//                    }
-//                    DataHoldSingleton.getInstance().report.put(jsonObject); //レポートに追加
-//
-//
-//        TextView log = (TextView)(findViewById(R.id.logInfo));
-//        log.setText("num:"+DataHoldSingleton.getInstance().report.length()+"\n" + jsonObject);
+        long nowTime = System.currentTimeMillis();
+        long interval = nowTime - lastSpeedReportTime;
+
+        if(interval < speedReportInterval) return;
+
+        lastSpeedReportTime = nowTime;    //最終更新時刻を更新
+
+        JSONObject jsonObject = new JSONObject();
+        try {
+            //結果を追加
+            jsonObject.put("typename", "SPEEDREPORT");
+            jsonObject.put("speed", speed_foward );
+            jsonObject.put("degree", speed_right );
+            jsonObject.put("latitude", currentLatitude);
+            jsonObject.put("longtitude", currentLongtitude);
+
+            Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
+            jsonObject.put("time", timestamp);
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        DataHoldSingleton.getInstance().report.put(jsonObject); //レポートに追加
     }
 
     @Override
     public void finishedFetchingHttpGetData(JSONArray jsonObject) {
         return ;
-    }
-
-    //レポートボタン押した時の処理
-    @Override
-    public void onClick(View v) {
-
-        sendReport();
-
     }
 
     public void sendReport(){
