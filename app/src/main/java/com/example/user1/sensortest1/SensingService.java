@@ -145,7 +145,7 @@ public class SensingService extends Service implements SensorEventListener,
                 textView.setText(strTmp);
 
                 if(flg){
-                    showInfo(event);
+
                 }
 
                 if(oldTime == 0) oldTime = System.currentTimeMillis();
@@ -200,6 +200,79 @@ public class SensingService extends Service implements SensorEventListener,
         @Override
         public void onAccuracyChanged(Sensor sensor, int accuracy) {
 
+        }
+
+        long lastDodgeTime = 0;
+        final long dodgeInterval = 1000;    //ms
+        private String logInfo = "";
+        final float fowardThreshold = 10;   //km/h
+        final float sideThreshold = 1;  //km/h
+        final float rotateThreshold = 0.8f; //cm/s ?
+        public void checkDODGE(){
+            long nowTime = System.currentTimeMillis();
+            long interval = nowTime - lastDodgeTime;
+
+            if(interval < dodgeInterval) return;
+
+            //時速10km/h以上で
+            if(speed_foward * 60 * 60 / 1000 > fowardThreshold){
+                //横移動速度が時速1km/h以上で
+                if(Math.abs(speed_right * 60 * 60 / 1000/1000 )> sideThreshold){
+                    //回転速度が0.8cm/s以下、つまり回転していないとき
+                    if(speed_rotate < rotateThreshold){
+                        lastDodgeTime = nowTime;    //最終更新時刻を更新
+
+                        JSONObject jsonObject = new JSONObject();
+                        try {
+                            //結果を追加
+                            jsonObject.put("typename", "DODGE");
+                            jsonObject.put("speed", speed_foward  );
+                            jsonObject.put("degree", speed_right );
+                            jsonObject.put("latitude", currentLatitude);
+                            jsonObject.put("longtitude", currentLongtitude);
+
+                            Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
+                            jsonObject.put("time", timestamp);
+//                        logInfo += jsonObject;
+//                        TextView log = (TextView)(findViewById(R.id.logInfo));
+//                        log.setText(logInfo);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                        report.put(jsonObject);
+                    }
+                }
+            }
+        }
+
+        long lastSpeedReportTime = 0;
+        final long speedReportInterval = 3000;    //ms
+
+        //定期スピードレポート
+        public void reportSpeed(){
+            long nowTime = System.currentTimeMillis();
+            long interval = nowTime - lastSpeedReportTime;
+
+            if(interval < speedReportInterval) return;
+
+            lastSpeedReportTime = nowTime;    //最終更新時刻を更新
+
+            JSONObject jsonObject = new JSONObject();
+            try {
+                //結果を追加
+                jsonObject.put("typename", "SPEEDREPORT");
+                jsonObject.put("speed", speed_foward );
+                jsonObject.put("degree", speed_right );
+                jsonObject.put("latitude", currentLatitude);
+                jsonObject.put("longtitude", currentLongtitude);
+
+                Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
+                jsonObject.put("time", timestamp);
+
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+            report.put(jsonObject); //レポートに追加
         }
     }
 
@@ -402,78 +475,6 @@ public class SensingService extends Service implements SensorEventListener,
         }
     }
 
-    long lastDodgeTime = 0;
-    final long dodgeInterval = 1000;    //ms
-    private String logInfo = "";
-    final float fowardThreshold = 10;   //km/h
-    final float sideThreshold = 1;  //km/h
-    final float rotateThreshold = 0.8f; //cm/s ?
-    public void checkDODGE(){
-        long nowTime = System.currentTimeMillis();
-        long interval = nowTime - lastDodgeTime;
-
-        if(interval < dodgeInterval) return;
-
-        //時速10km/h以上で
-        if(speed_foward * 60 * 60 / 1000 > fowardThreshold){
-            //横移動速度が時速1km/h以上で
-            if(Math.abs(speed_right * 60 * 60 / 1000/1000 )> sideThreshold){
-                //回転速度が0.8cm/s以下、つまり回転していないとき
-                if(speed_rotate < rotateThreshold){
-                    lastDodgeTime = nowTime;    //最終更新時刻を更新
-
-                    JSONObject jsonObject = new JSONObject();
-                    try {
-                        //結果を追加
-                        jsonObject.put("typename", "DODGE");
-                        jsonObject.put("speed", speed_foward  );
-                        jsonObject.put("degree", speed_right );
-                        jsonObject.put("latitude", currentLatitude);
-                        jsonObject.put("longtitude", currentLongtitude);
-
-                        Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
-                        jsonObject.put("time", timestamp);
-//                        logInfo += jsonObject;
-//                        TextView log = (TextView)(findViewById(R.id.logInfo));
-//                        log.setText(logInfo);
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                    }
-                    report.put(jsonObject);
-                }
-            }
-        }
-    }
-
-    long lastSpeedReportTime = 0;
-    final long speedReportInterval = 3000;    //ms
-
-    //定期スピードレポート
-    public void reportSpeed(){
-        long nowTime = System.currentTimeMillis();
-        long interval = nowTime - lastSpeedReportTime;
-
-        if(interval < speedReportInterval) return;
-
-        lastSpeedReportTime = nowTime;    //最終更新時刻を更新
-
-        JSONObject jsonObject = new JSONObject();
-        try {
-            //結果を追加
-            jsonObject.put("typename", "SPEEDREPORT");
-            jsonObject.put("speed", speed_foward );
-            jsonObject.put("degree", speed_right );
-            jsonObject.put("latitude", currentLatitude);
-            jsonObject.put("longtitude", currentLongtitude);
-
-            Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
-            jsonObject.put("time", timestamp);
-
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        report.put(jsonObject); //レポートに追加
-    }
 
     @Override
     public void finishedFetchingHttpGetData(JSONArray jsonObject) {
