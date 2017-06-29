@@ -1,6 +1,5 @@
 package com.example.user1.sensortest1;
 
-
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
@@ -9,6 +8,8 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.icu.text.SimpleDateFormat;
+import android.icu.util.TimeZone;
 import android.location.Location;
 
 import android.location.LocationManager;
@@ -38,11 +39,17 @@ import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.places.Places;
+import com.google.android.gms.nearby.messages.Strategy;
+import com.google.android.gms.vision.text.Text;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.util.Calendar;
+import java.util.Locale;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
@@ -53,13 +60,20 @@ public class MainActivity extends Activity implements SensorEventListener,
                     com.google.android.gms.location.LocationListener,
         HttpGetData.HttpGetDataListner
 {
-
     private SensorManager sensorManager;
     private TextView textView, textInfo;
     private float sensorX;
     private float sensorY;
     private float sensorZ;
     private boolean flg = true;
+
+    private float speed_rotate = 0; //ジャイロセンサの加速度から計算した回転速度(Javaの命名規約におとなしく従ってキャメルケースにした方がよかった？)
+    private float speed_foward = 0; //GPSから取得した前進速度
+    private float speed_right = 0;  //加速度センサから計算した横移動速度
+    private float currentLatitude = 0;      //現在の位置
+    private float currentLongtitude = 0;
+
+    private JSONArray report = new JSONArray(); //送信する予定の、蓄積した報告データ
 
     private LocationManager locationManager;
 
@@ -84,10 +98,8 @@ public class MainActivity extends Activity implements SensorEventListener,
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
 
         textInfo = (TextView) findViewById(R.id.text_info);
-
         // Get an instance of the TextView
         textView = (TextView) findViewById(R.id.text_view);
-
 
         //位置情報のパーミッションチェック
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -97,14 +109,15 @@ public class MainActivity extends Activity implements SensorEventListener,
             locationStart();
         }
 
-        test();
+        //test(); //テスト用！本番では外す
     }
 
     //テスト用
     void test(){
         HttpGetData aaaa = new HttpGetData(this);
-        //aaaa.execute(36.333, 32.0, 2323.0, 222.2);
+        aaaa.execute(36.333, 32.0, 2323.0, 222.2);  //データベースからフェッチ
 
+        //報告用JSONオブジェクト作成
         JSONObject jsonObject = new JSONObject();
         try {
             jsonObject.put("typename", "DODGE");
@@ -112,7 +125,8 @@ public class MainActivity extends Activity implements SensorEventListener,
             jsonObject.put("degree", 10.1);
             jsonObject.put("latitude", 164.2323232);
             jsonObject.put("longtitude", 36.7474737);
-            jsonObject.put("time", "2017-06-03T11:01:01.000");
+            Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
+            jsonObject.put("time", timestamp);
 
             JSONArray jsonArray = new JSONArray();
             jsonArray.put(jsonObject);
@@ -124,7 +138,8 @@ public class MainActivity extends Activity implements SensorEventListener,
             jsonObject.put("degree", 39.1);
             jsonObject.put("latitude", 163.2323232);
             jsonObject.put("longtitude", 36.7874737);
-            jsonObject.put("time", "2017-06-03T11:15:01.000");
+            timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
+            jsonObject.put("time", timestamp);
             jsonArray.put(jsonObject);
 
             Log.d("HttpPostData", jsonArray.toString());
@@ -169,12 +184,9 @@ public class MainActivity extends Activity implements SensorEventListener,
         if (!mResolvingError) {
             // Connect the client.
             mGoogleApiClient.connect();
-
-
         } else {
 
         }
-
     }
 
     private void stopFusedLocation(){
@@ -182,7 +194,7 @@ public class MainActivity extends Activity implements SensorEventListener,
         mGoogleApiClient.disconnect();
     }
 
-    // 結果の受け取り
+    // パーミッション要求結果の受け取り
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         if (requestCode == 1000) {
@@ -192,7 +204,6 @@ public class MainActivity extends Activity implements SensorEventListener,
 
                 locationStart();
                 return;
-
             } else {
                 // それでも拒否された時の対応
                 Toast toast = Toast.makeText(this, "これ以上なにもできません", Toast.LENGTH_SHORT);
@@ -200,9 +211,6 @@ public class MainActivity extends Activity implements SensorEventListener,
             }
         }
     }
-
-
-
 
     @Override
     protected void onResume() {
@@ -228,7 +236,6 @@ public class MainActivity extends Activity implements SensorEventListener,
         stopFusedLocation();
     }
 
-
     @Override
     public void onConnected(Bundle bundle) {
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -239,25 +246,22 @@ public class MainActivity extends Activity implements SensorEventListener,
 
     //-----センサー値取得関係-----
     final private float k = 0.1f;   //値が大きいほどローパスフィルタの効きが強くなる
-    private float lowPassX = 0;
-    private float lowPassY = 0;
-    private float lowPassZ = 0;
+    private float lowPassX = 0,lowPassY = 0,lowPassZ = 0; //ローパスフィルタ通過後の値
 
     private float rawAx = 0, rawAy=0, rawAz = 0;    //ハイパスフィルタを通した値
 
     long oldTime = 0;   //前回、センサの値が変更されたとき
 
-    float vx = 0, vy = 0, vz = 0;   //現在こいつらは端末から見た座標(ローカル座標)なことに注意
-    float x=0, y=0, z=0;
-
+    float vx = 0, vy = 0, vz = 0;   //速度だけど端末から見た座標(ローカル座標)なことに注意
+    float x=0, y=0, z=0;    //位置。精度悪くてあてにならない。
 
     long oldTime_rotate = 0;    //前回更新時刻
     final private float k_rotate = 0.1f;    //回転センサーの値へのローパスフィルターの効きの強さ
-    //private float magX=0, magY=0, magZ=0;   //回転センサーの値
     private float vx_rotate =0, vy_rotate =0, vz_rotate =0;    //回転センサーの変化量
     private float lowPassX_rotate =0, lowPassY_rotate =0, lowPassZ_rotate =0;
 
     //このメソッドは、リスナーとして登録してあるどのセンサーの値が変化しても呼ばれる
+    //ので中でどのセンサーか場合分けしなくてはならない
     @Override
     public void onSensorChanged(SensorEvent event) {
         //このメソッドが呼ばれた理由となる、値の変わったセンサのタイプを確かめる必要がある
@@ -278,7 +282,6 @@ public class MainActivity extends Activity implements SensorEventListener,
             rawAx = event.values[0] - lowPassX;
             rawAy = event.values[1] - lowPassY;
             rawAz = event.values[2] - lowPassZ;
-
 
             String strTmp = "加速度センサー\n"
                     + " X: " + sensorX + "\n"
@@ -323,6 +326,11 @@ public class MainActivity extends Activity implements SensorEventListener,
             x += vx * interval / 1000; // [cm] にする
             y += vy * interval / 1000;
             z += vz * interval / 1000;
+
+            //スピード更新
+            speed_right = vx;
+            //必然性がないのにここでDODGE判定
+            checkDODGE();
         }
 
         //回転センサーの場合
@@ -339,10 +347,6 @@ public class MainActivity extends Activity implements SensorEventListener,
             lowPassY_rotate += (event.values[1] - lowPassY_rotate) * k_rotate;
             lowPassZ_rotate += (event.values[2] - lowPassZ_rotate) * k_rotate;
 
-//            vx_rotate = (lowPassX_rotate - tempX)/interval;
-//            vy_rotate = (lowPassY_rotate - tempY)/interval;
-//            vz_rotate = (lowPassZ_rotate - tempZ)/interval;
-
             // High Pass Filter
             float hiPassX_rotate = event.values[0] - lowPassX_rotate;
             float hiPassY_rotate = event.values[1] - lowPassY_rotate;
@@ -352,6 +356,9 @@ public class MainActivity extends Activity implements SensorEventListener,
             vx_rotate += hiPassX_rotate * interval / 10;
             vy_rotate += hiPassY_rotate * interval / 10;
             vz_rotate += hiPassZ_rotate * interval / 10;
+
+            //スピード更新
+            speed_rotate = vx;
         }
     }
 
@@ -411,11 +418,17 @@ public class MainActivity extends Activity implements SensorEventListener,
         textLog += "Bearing=" + String.valueOf(location.getBearing()) + "\n";
         textLog += "time= " + String.valueOf(lastLocationTime) + " msec \n";
 
-        Log.d("AAAAAA", textLog);
+        Log.d("MainActivity", textLog);
 
         // 緯度経度の表示
         TextView gpsInfo = (TextView) findViewById(R.id.GPSInfo);
         gpsInfo.setText(textLog);
+
+        //スピード更新
+        speed_foward = location.getSpeed();
+        //位置更新
+        currentLatitude = (float) location.getLatitude();
+        currentLongtitude = (float)location.getLongitude();
     }
 
     @Override
@@ -435,6 +448,49 @@ public class MainActivity extends Activity implements SensorEventListener,
 
         } else {
             mResolvingError = true;
+        }
+    }
+
+    long lastDodgeTime = 0;
+    final long dodgeInterval = 1000;    //ms
+    private String logInfo = "";
+    final float fowardThreshold = 0;   //km/h
+    final float sideThreshold = 0;  //km/h
+    final float rotateThreshold = 0.8f; //cm/s ?
+    public void checkDODGE(){
+        long nowTime = System.currentTimeMillis();
+        long interval = nowTime - lastDodgeTime;
+
+        if(interval < dodgeInterval) return;
+
+        //時速10km/h以上で
+        if(speed_foward * 60 * 60 / 1000 > fowardThreshold){
+            //横移動速度が時速1km/h以上で
+            if(Math.abs(speed_right * 60*60/1000/1000 )> sideThreshold){
+                //回転速度が0.8cm/s以下、つまり回転していないとき
+                if(speed_rotate < rotateThreshold){
+                    lastDodgeTime = nowTime;    //最終更新時刻を更新
+
+                    JSONObject jsonObject = new JSONObject();
+                    try {
+                        //結果を追加
+                        jsonObject.put("typename", "DODGE");
+                        jsonObject.put("speed", speed_foward);
+                        jsonObject.put("degree", speed_right);
+                        jsonObject.put("latitude", currentLatitude);
+                        jsonObject.put("longtitude", currentLongtitude);
+
+                        Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
+                        jsonObject.put("time", timestamp);
+                        logInfo += jsonObject;
+                        TextView log = (TextView)(findViewById(R.id.logInfo));
+                        log.setText(logInfo);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    report.put(jsonObject);
+                }
+            }
         }
     }
 

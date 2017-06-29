@@ -17,6 +17,12 @@ import java.io.BufferedInputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
+/**
+ * Created by user1 on 2017/06/27.
+ * データベースサーバにクエリを送信して、結果をJSONで受け取ります
+ * 受信が終わったら呼び出し元のコールバックメソッドを呼び出して結果を渡します
+ */
+
 public class HttpGetData extends AsyncTask<Double, Void, JSONArray> {
 
     public interface HttpGetDataListner {

@@ -22,6 +22,7 @@ import java.util.Map;
 
 /**
  * Created by user1 on 2017/06/28.
+ * JSONを渡すとそれをデータベースサーバにPOSTします
  */
 
 public class HttpPostData extends AsyncTask<JSONArray, Void, JSONArray> {
@@ -29,7 +30,7 @@ public class HttpPostData extends AsyncTask<JSONArray, Void, JSONArray> {
     protected JSONArray doInBackground(JSONArray... params) {
 
         try {
-            URL url = new URL("http://192.168.1.110:3000/dots/api/post/json"); //in the real code, there is an ip and a port
+            URL url = new URL("http://192.168.1.110:3000/dots/api/post/json"); //データベースサーバのAPI
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
