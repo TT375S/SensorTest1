@@ -17,7 +17,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.view.View;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -64,7 +63,6 @@ public class SensingService extends Service implements SensorEventListener,
     }
 
     private SensorManager sensorManager;
-    private TextView textView, textInfo;
     private float sensorX;
     private float sensorY;
     private float sensorZ;
@@ -87,8 +85,6 @@ public class SensingService extends Service implements SensorEventListener,
     private LocationRequest locationRequest;
     private Location location;
     private long lastLocationTime = 0;
-
-    private String textLog = "start \n";
 
     @Override
     public void onCreate()  {
@@ -264,7 +260,6 @@ public class SensingService extends Service implements SensorEventListener,
                     + " X: " + vx_rotate + "\n"
                     + " Y: " + vy_rotate + "\n"
                     + " Z: " + vz_rotate;
-            textView.setText(strTmp);
 
             if(flg){
                 showInfo(event);
@@ -351,8 +346,6 @@ public class SensingService extends Service implements SensorEventListener,
 
         fData = event.sensor.getPower();
         info += "Power: "+String.valueOf(fData) +" mA\n";
-
-        textInfo.setText(info);
     }
 
     @Override
@@ -364,18 +357,6 @@ public class SensingService extends Service implements SensorEventListener,
     public void onLocationChanged(Location location) {
 
         lastLocationTime = location.getTime() - lastLocationTime;
-
-        textLog = "---------- onLocationChanged \n";
-        textLog += "Latitude=" + String.valueOf(location.getLatitude()) + "\n";
-        textLog += "Longitude=" + String.valueOf(location.getLongitude()) + "\n";
-        textLog += "Accuracy=" + String.valueOf(location.getAccuracy()) + "\n";
-        textLog += "Altitude=" + String.valueOf(location.getAltitude()) + "\n";
-        textLog += "Time=" + String.valueOf(location.getTime()) + "\n";
-        textLog += "Speed=" + String.valueOf(location.getSpeed()) + "\n";
-        textLog += "Bearing=" + String.valueOf(location.getBearing()) + "\n";
-        textLog += "time= " + String.valueOf(lastLocationTime) + " msec \n";
-
-        Log.d("MainActivity", textLog);
 
         //スピード更新
         speed_foward = location.getSpeed();
@@ -441,13 +422,11 @@ public class SensingService extends Service implements SensorEventListener,
 
                         Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
                         jsonObject.put("time", timestamp);
-//                        logInfo += jsonObject;
-//                        TextView log = (TextView)(findViewById(R.id.logInfo));
-//                        log.setText(logInfo);
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
                     DataHoldSingleton.getInstance().report.put(jsonObject);
+                    Log.d("SensingService", jsonObject.toString());
                 }
             }
         }
@@ -481,6 +460,7 @@ public class SensingService extends Service implements SensorEventListener,
             e.printStackTrace();
         }
         DataHoldSingleton.getInstance().report.put(jsonObject); //レポートに追加
+        Log.d("SensingService", jsonObject.toString());
     }
 
     @Override
@@ -489,6 +469,7 @@ public class SensingService extends Service implements SensorEventListener,
     }
 
     public void sendReport(){
+        Log.d("SensingService", "REPORT:"+DataHoldSingleton.getInstance().report);
         //レポート送信
         HttpPostData post = new HttpPostData();
         post.execute(DataHoldSingleton.getInstance().report);
