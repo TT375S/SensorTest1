@@ -77,8 +77,6 @@ public class MainActivity extends Activity implements SensorEventListener,
     private float currentLatitude = 0;      //現在の位置
     private float currentLongtitude = 0;
 
-    private JSONArray report = new JSONArray(); //送信する予定の、蓄積した報告データ
-
     private LocationManager locationManager;
 
     // LocationClient の代わりにGoogleApiClientを使います
@@ -116,7 +114,7 @@ public class MainActivity extends Activity implements SensorEventListener,
         //レポートボタンの設定
         findViewById(R.id.reportButton).setOnClickListener(this);
 
-        test(); //テスト用！本番では外す
+        //test(); //テスト用！本番では外す
     }
 
     //テスト用
@@ -167,8 +165,8 @@ public class MainActivity extends Activity implements SensorEventListener,
 
         // LocationRequest を生成して精度、インターバルを設定
         locationRequest = LocationRequest.create();
-        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        locationRequest.setInterval(1000);
+        locationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+        locationRequest.setInterval(100);
         locationRequest.setFastestInterval(16);
 
         fusedLocationProviderApi = LocationServices.FusedLocationApi;
@@ -227,6 +225,8 @@ public class MainActivity extends Activity implements SensorEventListener,
         Sensor magne = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);  //ドリフトを考慮したジャイロセンサー値を得る
         sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_FASTEST);
         sensorManager.registerListener(this, magne, SensorManager.SENSOR_DELAY_FASTEST);
+
+        startFusedLocation();
     }
 
     // 解除するコード
@@ -234,13 +234,13 @@ public class MainActivity extends Activity implements SensorEventListener,
     protected void onPause() {
         super.onPause();
         // Listenerを解除
-        sensorManager.unregisterListener(this);
+        //sensorManager.unregisterListener(this);
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        stopFusedLocation();
+        //stopFusedLocation();
     }
 
     @Override
@@ -438,6 +438,12 @@ public class MainActivity extends Activity implements SensorEventListener,
         //位置更新
         currentLatitude = (float) location.getLatitude();
         currentLongtitude = (float)location.getLongitude();
+
+
+        //必然性がないのにここでDODGE判定
+        checkDODGE();
+        //スピードレポート
+        reportSpeed();
     }
 
     @Override
@@ -497,7 +503,7 @@ public class MainActivity extends Activity implements SensorEventListener,
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
-                    report.put(jsonObject);
+                    DataHoldSingleton.getInstance().report.put(jsonObject);
                 }
             }
         }
@@ -530,11 +536,11 @@ public class MainActivity extends Activity implements SensorEventListener,
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
-                    report.put(jsonObject); //レポートに追加
+                    DataHoldSingleton.getInstance().report.put(jsonObject); //レポートに追加
 
 
         TextView log = (TextView)(findViewById(R.id.logInfo));
-        log.setText("num:"+report.length()+"\n" + jsonObject);
+        log.setText("num:"+DataHoldSingleton.getInstance().report.length()+"\n" + jsonObject);
     }
 
     @Override
@@ -546,11 +552,15 @@ public class MainActivity extends Activity implements SensorEventListener,
     @Override
     public void onClick(View v) {
 
-                //レポート送信
-                HttpPostData post = new HttpPostData();
-                post.execute(report);
+        sendReport();
 
-                report = new JSONArray();
+    }
 
+    public void sendReport(){
+        //レポート送信
+        HttpPostData post = new HttpPostData();
+        post.execute(DataHoldSingleton.getInstance().report);
+
+        DataHoldSingleton.getInstance().report = new JSONArray();
     }
 }
