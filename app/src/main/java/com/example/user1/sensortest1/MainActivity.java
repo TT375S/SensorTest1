@@ -22,6 +22,8 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -42,6 +44,7 @@ import com.google.android.gms.location.places.Places;
 import com.google.android.gms.nearby.messages.Strategy;
 import com.google.android.gms.vision.text.Text;
 
+import org.apache.http.client.methods.HttpPost;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -58,7 +61,8 @@ public class MainActivity extends Activity implements SensorEventListener,
                     GoogleApiClient.ConnectionCallbacks,
                     GoogleApiClient.OnConnectionFailedListener,
                     com.google.android.gms.location.LocationListener,
-        HttpGetData.HttpGetDataListner
+        HttpGetData.HttpGetDataListner,
+        View.OnClickListener
 {
     private SensorManager sensorManager;
     private TextView textView, textInfo;
@@ -109,7 +113,10 @@ public class MainActivity extends Activity implements SensorEventListener,
             locationStart();
         }
 
-        //test(); //テスト用！本番では外す
+        //レポートボタンの設定
+        findViewById(R.id.reportButton).setOnClickListener(this);
+
+        test(); //テスト用！本番では外す
     }
 
     //テスト用
@@ -331,6 +338,8 @@ public class MainActivity extends Activity implements SensorEventListener,
             speed_right = vx;
             //必然性がないのにここでDODGE判定
             checkDODGE();
+            //スピードレポート
+            reportSpeed();
         }
 
         //回転センサーの場合
@@ -454,8 +463,8 @@ public class MainActivity extends Activity implements SensorEventListener,
     long lastDodgeTime = 0;
     final long dodgeInterval = 1000;    //ms
     private String logInfo = "";
-    final float fowardThreshold = 0;   //km/h
-    final float sideThreshold = 0;  //km/h
+    final float fowardThreshold = 10;   //km/h
+    final float sideThreshold = 1;  //km/h
     final float rotateThreshold = 0.8f; //cm/s ?
     public void checkDODGE(){
         long nowTime = System.currentTimeMillis();
@@ -466,7 +475,7 @@ public class MainActivity extends Activity implements SensorEventListener,
         //時速10km/h以上で
         if(speed_foward * 60 * 60 / 1000 > fowardThreshold){
             //横移動速度が時速1km/h以上で
-            if(Math.abs(speed_right * 60*60/1000/1000 )> sideThreshold){
+            if(Math.abs(speed_right * 60 * 60 / 1000/1000 )> sideThreshold){
                 //回転速度が0.8cm/s以下、つまり回転していないとき
                 if(speed_rotate < rotateThreshold){
                     lastDodgeTime = nowTime;    //最終更新時刻を更新
@@ -475,16 +484,16 @@ public class MainActivity extends Activity implements SensorEventListener,
                     try {
                         //結果を追加
                         jsonObject.put("typename", "DODGE");
-                        jsonObject.put("speed", speed_foward);
-                        jsonObject.put("degree", speed_right);
+                        jsonObject.put("speed", speed_foward * 60 * 60 / 1000 );
+                        jsonObject.put("degree", speed_right * 60 * 60 / 1000/1000);
                         jsonObject.put("latitude", currentLatitude);
                         jsonObject.put("longtitude", currentLongtitude);
 
                         Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
                         jsonObject.put("time", timestamp);
-                        logInfo += jsonObject;
-                        TextView log = (TextView)(findViewById(R.id.logInfo));
-                        log.setText(logInfo);
+//                        logInfo += jsonObject;
+//                        TextView log = (TextView)(findViewById(R.id.logInfo));
+//                        log.setText(logInfo);
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
@@ -494,8 +503,54 @@ public class MainActivity extends Activity implements SensorEventListener,
         }
     }
 
+    long lastSpeedReportTime = 0;
+    final long speedReportInterval = 3000;    //ms
+
+    //定期スピードレポート
+    public void reportSpeed(){
+        long nowTime = System.currentTimeMillis();
+        long interval = nowTime - lastSpeedReportTime;
+
+        if(interval < speedReportInterval) return;
+
+        lastSpeedReportTime = nowTime;    //最終更新時刻を更新
+
+                    JSONObject jsonObject = new JSONObject();
+                    try {
+                        //結果を追加
+                        jsonObject.put("typename", "SPEEDREPORT");
+                        jsonObject.put("speed", speed_foward * 60 * 60 / 1000 );
+                        jsonObject.put("degree", speed_right * 60 * 60 / 1000/1000);
+                        jsonObject.put("latitude", currentLatitude);
+                        jsonObject.put("longtitude", currentLongtitude);
+
+                        Timestamp timestamp = new Timestamp(Calendar.getInstance().getTimeInMillis() - 1000*60*60*24);
+                        jsonObject.put("time", timestamp);
+
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    report.put(jsonObject); //レポートに追加
+
+
+        TextView log = (TextView)(findViewById(R.id.logInfo));
+        log.setText("num:"+report.length()+"\n" + jsonObject);
+    }
+
     @Override
     public void finishedFetchingHttpGetData(JSONArray jsonObject) {
         return ;
+    }
+
+    //レポートボタン押した時の処理
+    @Override
+    public void onClick(View v) {
+
+                //レポート送信
+                HttpPostData post = new HttpPostData();
+                post.execute(report);
+
+                report = new JSONArray();
+
     }
 }

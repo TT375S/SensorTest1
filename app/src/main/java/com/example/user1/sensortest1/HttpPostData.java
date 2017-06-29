@@ -30,7 +30,7 @@ public class HttpPostData extends AsyncTask<JSONArray, Void, JSONArray> {
     protected JSONArray doInBackground(JSONArray... params) {
 
         try {
-            URL url = new URL("http://192.168.1.110:3000/dots/api/post/json"); //データベースサーバのAPI
+            URL url = new URL("http://taiyakon.xyz:3000/dots/api/post/json"); //データベースサーバのAPI
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
